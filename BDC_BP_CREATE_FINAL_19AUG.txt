@@ -1,0 +1,256 @@
+*&---------------------------------------------------------------------*
+*& Report ZZAD_BP_CREATE
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZZAD_BP_CREATE.
+PARAMETERS:
+p_file   TYPE rlgrap-filename,                  " File Path
+  e_file   TYPE rlgrap-filename OBLIGATORY,       " Error File Path
+  p_mode   TYPE c OBLIGATORY DEFAULT 'N'.
+
+DATA:
+  BEGIN OF fs_bp,
+ORG_NAME like BUT000-NAME_ORG1,
+
+STREET like ADDR1_DATA-STREET,
+HOUSE_NUM1 like  ADDR1_DATA-HOUSE_NUM1,
+
+POST_CODE1 like  ADDR1_DATA-POST_CODE1,
+CITY1 like ADDR1_DATA-CITY1,
+
+
+END OF fs_bp.
+*Internal table decleration
+DATA:
+   t_field    LIKE TABLE OF fs_bp,
+   t_bdcdata  LIKE TABLE OF bdcdata.
+TYPES : BEGIN OF ty_s_error,
+          msg_err(60) TYPE c,
+        END OF ty_s_error.
+DATA:
+  fs_bdcdata LIKE LINE OF t_bdcdata,   " Structure type of bdcdata
+   w_str  TYPE string.
+
+* Data decleration
+DATA:
+  wa_path TYPE string ,
+  wa_error TYPE string,
+  wa_cnt   TYPE i,
+  w_mode    TYPE c,
+  wa_cnt1(2) TYPE n,
+  it_output type table of ty_s_error,
+  wa_output like line of it_output.
+
+AT SELECTION-SCREEN.
+* Mode 'A' = Foreground mode
+* Mode 'N' = Background mode
+  IF p_mode = 'A' OR p_mode = 'N' .
+
+    w_mode = p_mode.
+
+  ELSE.
+*Error Message
+    MESSAGE 'PLEASE ENTER THE MODE A or N' TYPE 'E'.
+  ENDIF.
+
+* Opening window for path selection
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = p_file.
+
+  TYPES:
+    fs_struct(4096) TYPE c OCCURS 0 .
+
+  DATA:
+    w_struct TYPE fs_struct.
+
+* Uploading excel file.
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+    EXPORTING
+      i_field_seperator          = 'X'
+*   I_LINE_HEADER              =
+      i_tab_raw_data             = w_struct
+      i_filename                 = p_file
+    TABLES
+      i_tab_converted_data       = t_field
+    EXCEPTIONS
+      conversion_failed          = 1
+      OTHERS                     = 2
+            .
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+*Opening window for Error file download
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR e_file.
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = e_file.
+
+* start of selection event.
+START-OF-SELECTION.
+
+  LOOP AT t_field INTO fs_bp .
+    REFRESH: t_bdcdata.
+    CLEAR fs_bdcdata.
+
+    PERFORM populate_bdcdata.
+    PERFORM insert_data.
+  ENDLOOP.
+
+
+
+FORM populate_bdcdata .
+
+
+PERFORM :
+
+fill_bdc_data USING  'SAPLBUS_LOCATOR' '3000' 'X' ' '  ' ',
+fill_bdc_data USING  '' '' '' 'BDC_OKCODE'  '=SCREEN_1000_CRE_ORGA',
+fill_bdc_data USING  'SAPLBUS_LOCATOR' '3000' 'X' ' '  ' ',
+fill_bdc_data USING  '' '' '' 'BDC_OKCODE' '=SCREEN_1110_CHG_ROLE',
+fill_bdc_data USING   ''  ''  ''   'BUS_JOEL_MAIN-CREATION_GROUP' 'BPEE',
+fill_bdc_data USING   ''  ''  '' 'BDC_CURSOR' 'BUS_JOEL_MAIN-PARTNER_ROLE',
+fill_bdc_data USING   ''  ''  ''   'BUS_JOEL_MAIN-PARTNER_ROLE' 'FLVN01',
+fill_bdc_data USING   ''  ''  ''   'BUS_JOEL_MAIN-PARTNER_TIMEDEP' '000001',
+ fill_bdc_data USING  ''  ''  '' 'SZA11_0100-TEL_COUNTR' 'DE',
+ fill_bdc_data USING  ''  ''  '' 'SZA11_0100-MOB_COUNTR' 'DE',
+ fill_bdc_data USING  ''  ''  '' 'SZA11_0100-FAX_COUNTR' 'DE',
+fill_bdc_data USING 'SAPLSPO1' '0600' 'X' ' '  ' ',
+fill_bdc_data USING   ''  ''  ''   'BDC_OKCODE' '=OPT1',
+
+fill_bdc_data USING  'SAPLBUS_LOCATOR' '3000' 'X' ' '  ' ',
+fill_bdc_data USING   ''  ''  ''   'BDC_OKCODE' '=SCREEN_1000_MAIN_P02',
+fill_bdc_data USING   ''  ''  ''   'BUS_JOEL_MAIN-CREATION_GROUP' 'BPEE',
+fill_bdc_data USING   ''  ''  ''   'BUS_JOEL_MAIN-PARTNER_ROLE' 'FLVN01',
+fill_bdc_data USING   ''  ''  ''   'BUS_JOEL_MAIN-PARTNER_TIMEDEP' '000001',
+
+fill_bdc_data USING  ''  ''  ''  'BUT000-NAME_ORG1' fs_bp-ORG_NAME,
+fill_bdc_data USING   ''  ''  ''  'BDC_CURSOR' 'ADDR1_DATA-LANGU',
+fill_bdc_data USING  ''  ''  '' 'ADDR1_DATA-STREET' fs_bp-STREET,
+fill_bdc_data USING  ''  ''  '' 'ADDR1_DATA-HOUSE_NUM1' fs_bp-HOUSE_NUM1,
+ fill_bdc_data USING  ''  ''  '' 'ADDR1_DATA-POST_CODE1' fs_bp-POST_CODE1,
+ fill_bdc_data USING  ''  ''  '' 'ADDR1_DATA-CITY1' fs_bp-CITY1,
+ fill_bdc_data USING  ''  ''  '' 'ADDR1_DATA-COUNTRY' 'DE',
+ fill_bdc_data USING  ''  ''  '' 'ADDR1_DATA-LANGU' 'DE',
+ fill_bdc_data USING  ''  ''  '' 'SZA11_0100-TEL_COUNTR' 'DE',
+ fill_bdc_data USING  ''  ''  '' 'SZA11_0100-MOB_COUNTR' 'DE',
+ fill_bdc_data USING  ''  ''  '' 'SZA11_0100-FAX_COUNTR' 'DE',
+
+
+
+ fill_bdc_data USING  'SAPLBUS_LOCATOR' '3000' 'X' ' '  ' ',
+fill_bdc_data USING  ''  ''  '' 'BDC_OKCODE' '=BUS_MAIN_SAVE',
+fill_bdc_data USING  ''  ''  '' 'BUS_JOEL_MAIN-CREATION_GROUP' 'BPEE',
+fill_bdc_data USING  ''  ''  '' 'BUS_JOEL_MAIN-PARTNER_ROLE' 'FLVN01',
+fill_bdc_data USING  ''  ''  '' 'BUS_JOEL_MAIN-PARTNER_TIMEDEP' '000001',
+fill_bdc_data USING  ''  ''  '' 'BDC_CURSOR' 'GV_PURCHASING_ORG',
+fill_bdc_data USING  ''  ''  '' 'GV_PURCHASING_ORG' '1010'.
+
+
+ENDFORM.
+
+FORM fill_bdc_data  USING    value(p_program)
+                             value(p_dynpro)
+                             value(p_begin)
+                             value(p_field)
+                             value(p_value).
+
+  CLEAR fs_bdcdata.
+  IF p_begin = 'X'.
+*" Screen Values.
+    fs_bdcdata-program = p_program.    " program name
+    fs_bdcdata-dynpro  = p_dynpro.     " screen no
+    fs_bdcdata-dynbegin   = p_begin.   " screen start
+    APPEND fs_bdcdata TO t_bdcdata.
+  ELSE.
+*" Filed Values.
+    CLEAR fs_bdcdata.
+    fs_bdcdata-fnam = p_field.         " Field name
+    fs_bdcdata-fval = p_value.         " Field value
+    CONDENSE fs_bdcdata-fval.
+    APPEND fs_bdcdata TO t_bdcdata.
+
+  ENDIF.                               " IF P_BEGIN = 'X'
+
+ENDFORM.
+
+FORM insert_data .
+
+*Data decleration
+  DATA:
+       t_msg TYPE TABLE OF bdcmsgcoll,   " Collecting messages
+       w_msg TYPE bdcmsgcoll,
+       w_msg1(51).
+
+  CALL TRANSACTION 'BP' USING t_bdcdata
+    MODE w_mode
+    UPDATE 'S'
+    MESSAGES INTO t_msg.
+
+  IF sy-subrc EQ 0.
+*    Uploaded into the database
+    WRITE :/ 'DATA UPLOADED IN BP..' .
+  ELSE.
+*    Error Found
+    LOOP AT t_msg INTO w_msg WHERE msgtyp EQ 'E'.
+*     Format Message
+      CALL FUNCTION 'MESSAGE_TEXT_BUILD'
+        EXPORTING
+          msgid               = w_msg-msgid
+          msgnr               = w_msg-msgnr
+          msgv1               = w_msg-msgv1
+          msgv2               = w_msg-msgv2
+          msgv3               = w_msg-msgv3
+          msgv4               = w_msg-msgv4
+        IMPORTING
+          message_text_output = w_msg1.
+
+
+      wa_output-msg_err = w_msg1.
+
+*Error message in downloaded file
+data:
+   wa_string(10) type c.
+
+    wa_string = fs_bp-ORG_NAME.
+
+    concatenate wa_string wa_output-msg_err into wa_output-msg_err separated by space.
+
+     APPEND wa_output-msg_err TO it_output.
+
+      wa_error = e_file.
+
+      CALL FUNCTION 'GUI_DOWNLOAD'
+        EXPORTING
+*         BIN_FILESIZE                    =
+          filename                        = wa_error
+*         FILETYPE                        = 'ASC'
+*         APPEND                          = ' '
+          write_field_separator           = 'X'
+        TABLES
+          data_tab                        = it_output
+*
+                .
+      IF sy-subrc <> 0.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      ENDIF.                           " IF sy-subrc <> 0.
+
+    ENDLOOP.
+
+  ENDIF.
+
+
+ENDFORM.                               " INSERT_DATA
