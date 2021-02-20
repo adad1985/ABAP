@@ -1,0 +1,119 @@
+*&---------------------------------------------------------------------*
+*& Report ZZAD_PP_COPY
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZZAD_PP_COPY.
+PARAMETERS:
+p_file   TYPE rlgrap-filename,                  " File Path
+partn_s  type C LENGTH 10.
+
+
+DATA:
+  BEGIN OF fs_bp,
+CLN TYPE C LENGTH 3,
+PARTN TYPE BU_PARTNER,
+PARTYP TYPE C VALUE 'LI',
+END OF fs_bp.
+
+
+
+TABLES: edkp1.
+DATA: pe_error TYPE edi_help-error_flag.
+DATA:
+
+t_field  LIKE TABLE OF fs_bp,
+t_cop type edkp1 occurs 10 WITH HEADER LINE,
+t_org TYPE edkp1 occurs 10 WITH HEADER LINE.
+
+t_org-MANDT = '400'.
+t_org-PARNUM = partn_s .
+t_org-PARTYP = 'LI'.
+
+
+
+* Opening window for path selection
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = p_file.
+
+  TYPES:
+    fs_struct(4096) TYPE c OCCURS 0 .
+
+  DATA:
+    w_struct TYPE fs_struct.
+
+* Uploading excel file.
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+    EXPORTING
+      i_field_seperator          = 'X'
+*   I_LINE_HEADER              =
+      i_tab_raw_data             = w_struct
+      i_filename                 = p_file
+    TABLES
+      i_tab_converted_data       = t_field
+    EXCEPTIONS
+      conversion_failed          = 1
+      OTHERS                     = 2
+            .
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+START-OF-SELECTION.
+
+  LOOP AT t_field INTO fs_bp .
+PERFORM insert_data.
+
+
+
+ENDLOOP.
+
+IF SY-SUBRC EQ 0.
+
+MESSAGE 'Partner Profile creation completed' TYPE 'I'.
+ENDIF.
+*&---------------------------------------------------------------------*
+*& Form INSERT_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM INSERT_DATA .
+t_cop-MANDT = '400'.
+t_cop-PARNUM = fs_bp-PARTN.
+t_cop-PARTYP = 'LI'.
+
+  CALL FUNCTION 'EDI_PARTNER_COPY_COMPLETE'
+  EXPORTING
+    SOURCE_EDKP1              = t_org
+    DEST_EDKP1                = t_cop
+*   ACTIVE_FIELD              = ' '
+*   NO_PTYPE_CHECK            = ' '
+*   NO_EXCEPTIONS             = ' '
+ IMPORTING
+   PE_ERROR                  =  pe_error
+* EXCEPTIONS
+*   DB_ERROR                  = 1
+*   ENTRY_NOT_EXIST           = 2
+*   ENTRY_ALREADY_EXIST       = 3
+*   PARAMETER_ERROR           = 4
+*   OTHERS                    = 5
+          .
+IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+
+ENDIF.
+
+ENDFORM.
